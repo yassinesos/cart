@@ -39,6 +39,10 @@ public final class Cart implements Serializable {
         return products;
     }
 
+    public void setProducts(Map<String, Integer> products){
+        this.products = products;
+    }
+
     @Override
     public String toString() {
         return "Cart {" +
