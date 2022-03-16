@@ -1,23 +1,24 @@
 package com.nespresso.sofa.interview.cart.services;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import com.nespresso.sofa.interview.cart.model.Cart;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
 
+@Service("cartService")
 public class CartService {
 
     @Autowired
-    private final PromotionEngine promotionEngine;
-
+    private PromotionEngine promotionEngine;
     @Autowired
-    private final CartStorage cartStorage;
+    private CartStorage cartStorage;
 
-    public CartService(PromotionEngine promotionEngine, CartStorage cartStorage) {
-        this.promotionEngine = promotionEngine;
-        this.cartStorage = cartStorage;
-    }
+
+
 
     /**
      * Add a quantity of a product to the cart and store the cart
@@ -30,18 +31,20 @@ public class CartService {
      *     Quantity must be added
      * @return True if card has been modified
      */
+
     public boolean add(UUID cartId, String productCode, int quantity) {
-        final Cart cart = cartStorage.loadCart(cartId);
-
-        if(cart == null) {
-            HashMap<String,Integer> products = new HashMap<String,Integer>();
-            products.put(productCode, quantity);
-            cartStorage.saveCart(new Cart(cartId, products));
-            return true;
+        synchronized (this) {
+            final Cart cart = cartStorage.loadCart(cartId);
+            if (quantity == 0) return false;
+            cart.getProducts().merge(productCode, quantity, Integer::sum);
+            if (cart.getProducts().get(productCode) < 0) {
+                return false;
+            } else {
+                cartStorage.saveCart(promotionEngine.apply(cart));
+                return true;
+            }
         }
-        cartStorage.saveCart(cart);
 
-        return false;
     }
 
     /**
@@ -55,10 +58,24 @@ public class CartService {
      *     The new quantity
      * @return True if card has been modified
      */
+    @Async
     public boolean set(UUID cartId, String productCode, int quantity) {
-        final Cart cart = cartStorage.loadCart(cartId);
-        cartStorage.saveCart(cart);
-        return false;
+        synchronized (this) {
+            final Cart cart = cartStorage.loadCart(cartId);
+            if (cart.getProducts().containsKey(productCode) && cart.getProducts().get(productCode) == quantity) {
+                return false;
+            }
+            if (quantity <= 0) {
+                Map copy = new LinkedHashMap(cart.getProducts());
+                copy.remove(productCode);
+                cart.setProducts(copy);
+                cartStorage.saveCart(promotionEngine.apply(cart));
+                return true;
+            }
+            cart.getProducts().put(productCode, quantity);
+            cartStorage.saveCart(promotionEngine.apply(cart));
+            return true;
+        }
     }
 
     /**
