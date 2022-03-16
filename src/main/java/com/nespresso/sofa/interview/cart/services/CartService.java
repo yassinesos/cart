@@ -1,5 +1,6 @@
 package com.nespresso.sofa.interview.cart.services;
 
+import java.util.HashMap;
 import java.util.UUID;
 
 import com.nespresso.sofa.interview.cart.model.Cart;
@@ -7,10 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 public class CartService {
 
+    @Autowired
     private final PromotionEngine promotionEngine;
-    private final CartStorage cartStorage;
 
     @Autowired
+    private final CartStorage cartStorage;
+
     public CartService(PromotionEngine promotionEngine, CartStorage cartStorage) {
         this.promotionEngine = promotionEngine;
         this.cartStorage = cartStorage;
@@ -29,7 +32,15 @@ public class CartService {
      */
     public boolean add(UUID cartId, String productCode, int quantity) {
         final Cart cart = cartStorage.loadCart(cartId);
+
+        if(cart == null) {
+            HashMap<String,Integer> products = new HashMap<String,Integer>();
+            products.put(productCode, quantity);
+            cartStorage.saveCart(new Cart(cartId, products));
+            return true;
+        }
         cartStorage.saveCart(cart);
+
         return false;
     }
 
